@@ -1,28 +1,17 @@
 package com.velorexe.unityandroidble.connecting;
 
 import android.annotation.SuppressLint;
-import android.app.Service;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
 import android.bluetooth.BluetoothGattCallback;
 import android.bluetooth.BluetoothGattCharacteristic;
-import android.bluetooth.BluetoothGattDescriptor;
 import android.bluetooth.BluetoothProfile;
-import android.content.Intent;
-import android.os.Binder;
 import android.os.Handler;
-import android.os.IBinder;
 import android.os.Looper;
 import android.util.Base64;
-
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-
 import com.velorexe.unityandroidble.BleMessage;
 import com.velorexe.unityandroidble.UnityAndroidBLE;
 import com.velorexe.unityandroidble.connecting.data.ServiceDataMappers;
-
-import org.json.JSONObject;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -39,7 +28,7 @@ public class BluetoothLeService {
         mTaskId = taskId;
     }
 
-    private Map<BluetoothGattCharacteristic, String> mCharTask = new HashMap<>();
+    private final Map<BluetoothGattCharacteristic, String> mCharTask = new HashMap<>();
 
     private String mMtuSizeTaskId = "";
 

@@ -2,8 +2,6 @@ package com.velorexe.unityandroidble.searching;
 
 import android.bluetooth.BluetoothDevice;
 
-import androidx.annotation.NonNull;
-
 import java.util.HashMap;
 import java.util.Map;
 

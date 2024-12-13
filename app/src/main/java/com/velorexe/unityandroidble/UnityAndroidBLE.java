@@ -2,6 +2,7 @@ package com.velorexe.unityandroidble;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
+import android.annotation.TargetApi;
 import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
@@ -14,60 +15,52 @@ import android.bluetooth.le.BluetoothLeScanner;
 import android.bluetooth.le.ScanFilter;
 import android.bluetooth.le.ScanSettings;
 import android.content.BroadcastReceiver;
-import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Handler;
-import android.os.IBinder;
 import android.os.Looper;
 import android.os.ParcelUuid;
 
-import androidx.annotation.RequiresApi;
-import androidx.core.app.ActivityCompat;
-
 import com.unity3d.player.UnityPlayer;
+
 import com.velorexe.unityandroidble.connecting.BluetoothLeService;
 import com.velorexe.unityandroidble.searching.LeDeviceListAdapter;
 import com.velorexe.unityandroidble.searching.LeScanCallback;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 public class UnityAndroidBLE {
-    private static UnityAndroidBLE mInstance = null;
+    private static UnityAndroidBLE mInstance;
 
-    private BluetoothAdapter mBluetoothAdapter = null;
-    private BluetoothManager mBluetoothManager = null;
-    private BluetoothLeScanner mBluetoothLeScanner = null;
+    private final BluetoothAdapter mBluetoothAdapter;
+    private final BluetoothLeScanner mBluetoothLeScanner;
 
     private final int SDK_INT = Build.VERSION.SDK_INT;
-    private Context mContext = null;
 
     private boolean mIsScanning = false;
-    private Handler mHandler = null;
+    private final Handler mHandler;
 
     private final LeScanCallback mScanCallback;
     private final LeDeviceListAdapter mDeviceListAdapter = new LeDeviceListAdapter();
-    private final Map<BluetoothDevice, BluetoothLeService> mConnectedServers = new HashMap<BluetoothDevice, BluetoothLeService>();
+    private final Map<BluetoothDevice, BluetoothLeService> mConnectedServers = new HashMap<>();
 
     public UnityAndroidBLE() {
-        mContext = UnityPlayer.currentActivity.getApplicationContext();
+        Context ctx = UnityPlayer.currentActivity.getApplicationContext();
 
-        mBluetoothManager = (BluetoothManager) mContext.getSystemService(Context.BLUETOOTH_SERVICE);
+        BluetoothManager mBluetoothManager = (BluetoothManager) ctx.getSystemService(Context.BLUETOOTH_SERVICE);
         mBluetoothAdapter = mBluetoothManager.getAdapter();
 
         mBluetoothLeScanner = mBluetoothAdapter.getBluetoothLeScanner();
 
         if (SDK_INT <= Build.VERSION_CODES.S &&
-                mContext.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED &&
+                ctx.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED &&
                 !mBluetoothAdapter.isEnabled()) {
             mBluetoothAdapter.enable();
         } else {
@@ -94,9 +87,10 @@ public class UnityAndroidBLE {
             }
         };
 
-        mContext.registerReceiver(mReceiver, new IntentFilter(BluetoothDevice.ACTION_FOUND));
+        ctx.registerReceiver(mReceiver, new IntentFilter(BluetoothDevice.ACTION_FOUND));
     }
 
+    @SuppressWarnings("unused")
     public static UnityAndroidBLE getInstance() {
         if (mInstance == null) {
             Context ctx = UnityPlayer.currentActivity.getApplicationContext();
@@ -140,7 +134,7 @@ public class UnityAndroidBLE {
                 && ctx.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
     }
 
-    @RequiresApi(api = Build.VERSION_CODES.S)
+    @TargetApi(Build.VERSION_CODES.S)
     private static boolean checkPermissionsAndroid12AndUp(Context ctx, Activity activity) {
         activity.requestPermissions(new String[]{
                 Manifest.permission.BLUETOOTH_SCAN,
@@ -152,6 +146,7 @@ public class UnityAndroidBLE {
     }
 
     @SuppressLint("MissingPermission")
+    @SuppressWarnings("unused")
     // UnityAndroidBLE can't be created without the proper Permissions
     public void searchForBleDevices(String taskId, int scanPeriod) {
         if (!mIsScanning) {
@@ -172,6 +167,7 @@ public class UnityAndroidBLE {
     }
 
     @SuppressLint("MissingPermission")
+    @SuppressWarnings("unused")
     // UnityAndroidBLE can't be created without the proper Permissions
     public void searchForBleDevicesWithFilter(String taskId, int scanPeriod,
                                               String deviceUuid,
@@ -214,6 +210,7 @@ public class UnityAndroidBLE {
     }
 
     @SuppressLint("MissingPermission")
+    @SuppressWarnings("unused")
     // UnityAndroidBLE can't be created without the proper Permissions
     public void getRssiForDevice(String taskId, String deviceAddress) {
         BluetoothDevice device = mDeviceListAdapter.getItem(deviceAddress);
@@ -223,7 +220,7 @@ public class UnityAndroidBLE {
 
             BleMessage msg = new BleMessage(taskId, "getRssiForDevice");
 
-            msg.device = device.getAddress().toString();
+            msg.device = device.getAddress();
             msg.name = device.getName();
 
             msg.base64Data = rssi + "";
@@ -238,13 +235,14 @@ public class UnityAndroidBLE {
     }
 
     @SuppressLint("MissingPermission")
+    @SuppressWarnings("unused")
     // UnityAndroidBLE can't be created without the proper Permissions
     public void connectToBleDevice(String taskId, String macAddress, int transport) {
         BluetoothDevice device = mDeviceListAdapter.getItem(macAddress);
 
         if (device != null) {
             BluetoothLeService leService = new BluetoothLeService(this, taskId);
-            device.connectGatt(mContext, false, leService.GattCallback, transport);
+            device.connectGatt(UnityPlayer.currentActivity.getApplicationContext(), false, leService.GattCallback, transport);
 
             mConnectedServers.put(device, leService);
         } else {
@@ -256,6 +254,7 @@ public class UnityAndroidBLE {
     }
 
     @SuppressLint("MissingPermission")
+    @SuppressWarnings("unused")
     // UnityAndroidBLE can't be created without the proper Permissions
     public void disconnectFromBleDevice(String taskId, String macAddress) {
         BluetoothDevice device = mDeviceListAdapter.getItem(macAddress);
@@ -281,6 +280,7 @@ public class UnityAndroidBLE {
     }
 
     @SuppressLint("MissingPermission")
+    @SuppressWarnings("unused")
     // UnityAndroidBLE can't be created without the proper Permissions
     public void changeMtuSize(String taskId, String macAddress, int mtuSize) {
         BluetoothDevice device = mDeviceListAdapter.getItem(macAddress);
@@ -292,7 +292,7 @@ public class UnityAndroidBLE {
                 if (leService.DeviceGatt.requestMtu(mtuSize)) {
                     BleMessage msg = new BleMessage(taskId, "requestMtuSize");
 
-                    msg.device = device.getAddress().toString();
+                    msg.device = device.getAddress();
                     msg.name = device.getName();
 
                     sendTaskResponse(msg);
@@ -320,6 +320,7 @@ public class UnityAndroidBLE {
     }
 
     @SuppressLint("MissingPermission")
+    @SuppressWarnings("unused")
     // UnityAndroidBLE can't be created without the proper Permissions
     public void readFromCharacteristic(String taskId, String deviceUuid, String serviceUuid, String characteristicUuid) {
         BluetoothDevice device = mDeviceListAdapter.getItem(deviceUuid);
@@ -363,6 +364,7 @@ public class UnityAndroidBLE {
     }
 
     @SuppressLint("MissingPermission")
+    @SuppressWarnings("unused")
     // UnityAndroidBLE can't be created without the proper Permissions
     public void writeToCharacteristic(String taskId, String deviceUuid, String serviceUuid, String characteristicUuid, byte[] data) {
         BluetoothDevice device = mDeviceListAdapter.getItem(deviceUuid);
@@ -399,6 +401,7 @@ public class UnityAndroidBLE {
     }
 
     @SuppressLint("MissingPermission")
+    @SuppressWarnings("unused")
     // UnityAndroidBLE can't be created without the proper Permissions
     public void subscribeToCharacteristic(String taskId, String deviceUuid, String serviceUuid, String characteristicUuid) {
         BluetoothDevice device = mDeviceListAdapter.getItem(deviceUuid);
@@ -441,6 +444,7 @@ public class UnityAndroidBLE {
     }
 
     @SuppressLint("MissingPermission")
+    @SuppressWarnings("unused")
     // UnityAndroidBLE can't be created without the proper Permissions
     public void unsubscribeFromCharacteristic(String taskId, String deviceUuid, String serviceUuid, String characteristicUuid) {
         BluetoothDevice device = mDeviceListAdapter.getItem(deviceUuid);

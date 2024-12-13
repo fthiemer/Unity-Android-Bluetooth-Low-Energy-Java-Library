@@ -4,12 +4,12 @@ plugins {
 
 android {
     namespace 'com.velorexe.unityandroidble'
-    compileSdk 33
+    compileSdk 34
 
     defaultConfig {
         applicationId "com.velorexe.unityandroidble"
         minSdk 23
-        targetSdk 33
+        targetSdk 34
         versionCode 1
         versionName "1.0"
 
@@ -35,19 +35,16 @@ android {
 }
 
 dependencies {
-    implementation 'androidx.appcompat:appcompat:1.4.1'
-    implementation 'com.google.android.material:material:1.5.0'
-    implementation files('F:\\Projects\\UnityAndroidBLE\\app\\libs\\unity.jar')
-    testImplementation 'junit:junit:4.13.2'
-    androidTestImplementation 'androidx.test.ext:junit:1.1.3'
-    androidTestImplementation 'androidx.test.espresso:espresso-core:3.4.0'
+    implementation files('libs/unity.jar')
 }
 
-task deleteJar(type: Delete) {
+tasks.register('deleteJar', Delete) {
+    group('jar')
     delete 'libs/unityandroidble.jar'
 }
 
-task createJar(type: Copy) {
+tasks.register('createJar', Copy) {
+    group('jar')
     from('build/intermediates/compile_app_classes_jar/release/')
     into('libs/')
     include('classes.jar')

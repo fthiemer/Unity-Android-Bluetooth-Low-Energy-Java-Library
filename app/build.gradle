@@ -1,20 +1,10 @@
 plugins {
-    id 'com.android.application'
+    id 'com.android.library'
 }
 
 android {
     namespace 'com.velorexe.unityandroidble'
     compileSdk 34
-
-    defaultConfig {
-        applicationId "com.velorexe.unityandroidble"
-        minSdk 23
-        targetSdk 34
-        versionCode 1
-        versionName "1.0"
-
-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-    }
 
     buildTypes {
         release {
@@ -26,9 +16,6 @@ android {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
     }
-}
-
-android {
     lint {
         baseline = file("lint-baseline.xml")
     }
@@ -36,6 +23,13 @@ android {
 
 dependencies {
     implementation files('libs/unity.jar')
+    implementation 'com.github.polarofficial:polar-ble-sdk:5.10.0'
+}
+
+/*
+Not needed for creating .aar, but if sb wants to use them, here they are. First part needs to be switched back to
+plugins {
+    id 'com.android.application'
 }
 
 tasks.register('deleteJar', Delete) {
@@ -51,4 +45,4 @@ tasks.register('createJar', Copy) {
     rename('classes.jar', 'unityandroidble.jar')
 }
 
-createJar.dependsOn(deleteJar, build)
+createJar.dependsOn(deleteJar, build)*/

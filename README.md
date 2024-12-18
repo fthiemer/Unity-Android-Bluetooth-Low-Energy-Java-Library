@@ -1,8 +1,7 @@
-# Unity Android Bluetooth Low Energy Java Library
+# UnityAndroidBLE Java Library
 
 <p align="center">
     The Java library that the Unity Android Bluetooth Low Energy Plugin binds to<br>
-    <i>I should have picked a shorter title</i>
 </p>
 
 <p align="center">
@@ -15,7 +14,7 @@ This repository is to open-source the library that's used in my [Unity Android B
 
 ## Compiling
 
-Compiling the application to a `.jar` is simple. There's a Gradle task called `createJar` which builds the application for you, moves the jar to the `app/libs` directory and renames it to `unityandroidble.jar`.
+fthiemer: Compiling the application to a `.jar` is removed. You can add the functionality back in, by following instructions in app/build.gradle.
 
 ## Contact
 
@@ -23,3 +22,8 @@ If you need any information, have questions about the project or found any bugs 
 
 * Discord: `velorexe` / `Velorexe#8403`
 * Email: <degenerexe.code@gmail.com>
+
+
+# Relevant changes by fthiemer:
+As I added the Polar-BLE-SDK the conditions of the polar license apply for its use. 
+I added a copy of it in the root directory.

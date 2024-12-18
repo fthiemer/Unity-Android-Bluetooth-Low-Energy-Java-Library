@@ -23,6 +23,8 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.ParcelUuid;
+import com.polar.androidcommunications.common.ble.BleUtils;
+import com.polar.sdk.api.PolarBleApi;
 
 import com.unity3d.player.UnityPlayer;
 
@@ -49,7 +51,7 @@ public class UnityAndroidBLE {
 
     private final LeScanCallback mScanCallback;
     private final LeDeviceListAdapter mDeviceListAdapter = new LeDeviceListAdapter();
-    private final Map<BluetoothDevice, BluetoothLeService> mConnectedServers = new HashMap<>();
+    private final Map<BluetoothDevice, BluetoothLeService> mConnectedServers;
 
     public UnityAndroidBLE() {
         Context ctx = UnityPlayer.currentActivity.getApplicationContext();
@@ -88,6 +90,7 @@ public class UnityAndroidBLE {
         };
 
         ctx.registerReceiver(mReceiver, new IntentFilter(BluetoothDevice.ACTION_FOUND));
+        mConnectedServers = new HashMap<>();
     }
 
     @SuppressWarnings("unused")

@@ -58,7 +58,6 @@ public class UnityAndroidBLE {
     private final LeDeviceListAdapter mDeviceListAdapter = new LeDeviceListAdapter();
     private final Map<BluetoothDevice, BluetoothLeService> mConnectedServers;
 
-
     public UnityAndroidBLE() {
         Context ctx = UnityPlayer.currentActivity.getApplicationContext();
 
@@ -104,6 +103,10 @@ public class UnityAndroidBLE {
         mConnectedServers = new HashMap<>();
     }
 
+    /**
+     * Returns the Singleton instance of UnityAndroidBLE.
+     * @return Singleton instance of UnityAndroidBLE
+     */
     @SuppressWarnings("unused")
     public static UnityAndroidBLE getInstance() {
         if (mInstance == null) {
@@ -460,6 +463,9 @@ public class UnityAndroidBLE {
     @SuppressLint("MissingPermission")
     @SuppressWarnings("unused")
     // UnityAndroidBLE can't be created without the proper Permissions
+    /// <summary>
+    /// Unsubscribes from a BLE Characteristic.
+    /// </summary>
     public void unsubscribeFromCharacteristic(String taskId, String deviceUuid, String serviceUuid, String characteristicUuid) {
         BluetoothDevice device = mDeviceListAdapter.getItem(deviceUuid);
 
@@ -476,30 +482,35 @@ public class UnityAndroidBLE {
 
                 // If either of these values is false, something went wrong
                 if (descriptor.setValue(BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE) && gatt.writeDescriptor(descriptor) && gatt.setCharacteristicNotification(characteristic, false)) {
-                    BleMessage msg = new BleMessage(taskId, "unsubscribeFromCharacteristic");
+                    BleMessage msg = new BleMessage(taskId, "unsubscribeToCharacteristic");
                     sendTaskResponse(msg);
 
                     leService.unregisterSubscribe(characteristic);
                 } else {
-                    BleMessage msg = new BleMessage(taskId, "unsubscribeFromCharacteristic");
+                    BleMessage msg = new BleMessage(taskId, "unsubscribeToCharacteristic");
                     msg.setError("Can't unsubscribe from Characteristic, are you sure the Characteristic has Notifications or Indicate properties?");
 
                     sendTaskResponse(msg);
                 }
             } else {
-                BleMessage msg = new BleMessage(taskId, "unsubscribeFromCharacteristic");
+                BleMessage msg = new BleMessage(taskId, "unsubscribeToCharacteristic");
                 msg.setError("Can't unsubscribe from Characteristic of a BluetoothDevice that isn't connected to the device.");
 
                 sendTaskResponse(msg);
             }
         } else {
-            BleMessage msg = new BleMessage(taskId, "unsubscribeFromCharacteristic");
+            BleMessage msg = new BleMessage(taskId, "unsubscribeToCharacteristic");
             msg.setError("Can't unsubscribe from Characteristic of a BluetoothDevice that hasn't been discovered yet.");
 
             sendTaskResponse(msg);
         }
     }
 
+    /**
+     * Sends a BleMessage to Unity.
+     *
+     * @param message The BleMessage to send to Unity.
+     */
     public void sendTaskResponse(BleMessage message) {
         if (!message.id.isEmpty() && !message.command.isEmpty()) {
             UnityPlayer.UnitySendMessage("BleMessageAdapter", "OnBleMessage", message.toJson());

@@ -3,6 +3,10 @@ package com.velorexe.unityandroidble;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+/// <summary>
+/// Represents a message that is sent between Unity and the Android plugin.
+/// Properties for the Unity side of things to manage all it's interactions
+/// </summary>
 public class BleMessage {
 
     public String id;

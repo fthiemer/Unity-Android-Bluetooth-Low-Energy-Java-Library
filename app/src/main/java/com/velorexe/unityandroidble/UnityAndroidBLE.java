@@ -38,6 +38,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+
+/**
+ * UnityAndroidBLE is a Singleton class that provides methods to interact with Bluetooth Low Energy (BLE) devices from a Unity application on Android.
+ * It handles scanning, connecting, reading, writing, and subscribing to BLE characteristics.
+ */
 public class UnityAndroidBLE {
     private static UnityAndroidBLE mInstance;
 
@@ -53,6 +58,7 @@ public class UnityAndroidBLE {
     private final LeDeviceListAdapter mDeviceListAdapter = new LeDeviceListAdapter();
     private final Map<BluetoothDevice, BluetoothLeService> mConnectedServers;
 
+
     public UnityAndroidBLE() {
         Context ctx = UnityPlayer.currentActivity.getApplicationContext();
 
@@ -66,7 +72,12 @@ public class UnityAndroidBLE {
                 !mBluetoothAdapter.isEnabled()) {
             mBluetoothAdapter.enable();
         } else {
-            // Warn user that Bluetooth isn't enabled
+            //TODO: Ask user to activate bluetooth
+            /*if (!mBluetoothAdapter.isEnabled()) {
+                // Request to enable Bluetooth
+                Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+                UnityPlayer.currentActivity.startActivityForResult(enableBtIntent, 1);
+            }*/
         }
 
         // Setup for scanning BLE devices
@@ -465,24 +476,24 @@ public class UnityAndroidBLE {
 
                 // If either of these values is false, something went wrong
                 if (descriptor.setValue(BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE) && gatt.writeDescriptor(descriptor) && gatt.setCharacteristicNotification(characteristic, false)) {
-                    BleMessage msg = new BleMessage(taskId, "unsubscribeToCharacteristic");
+                    BleMessage msg = new BleMessage(taskId, "unsubscribeFromCharacteristic");
                     sendTaskResponse(msg);
 
                     leService.unregisterSubscribe(characteristic);
                 } else {
-                    BleMessage msg = new BleMessage(taskId, "unsubscribeToCharacteristic");
+                    BleMessage msg = new BleMessage(taskId, "unsubscribeFromCharacteristic");
                     msg.setError("Can't unsubscribe from Characteristic, are you sure the Characteristic has Notifications or Indicate properties?");
 
                     sendTaskResponse(msg);
                 }
             } else {
-                BleMessage msg = new BleMessage(taskId, "unsubscribeToCharacteristic");
+                BleMessage msg = new BleMessage(taskId, "unsubscribeFromCharacteristic");
                 msg.setError("Can't unsubscribe from Characteristic of a BluetoothDevice that isn't connected to the device.");
 
                 sendTaskResponse(msg);
             }
         } else {
-            BleMessage msg = new BleMessage(taskId, "unsubscribeToCharacteristic");
+            BleMessage msg = new BleMessage(taskId, "unsubscribeFromCharacteristic");
             msg.setError("Can't unsubscribe from Characteristic of a BluetoothDevice that hasn't been discovered yet.");
 
             sendTaskResponse(msg);
@@ -490,7 +501,11 @@ public class UnityAndroidBLE {
     }
 
     public void sendTaskResponse(BleMessage message) {
-        if (!message.id.isEmpty()) {
+        if (!message.id.isEmpty() && !message.command.isEmpty()) {
+            UnityPlayer.UnitySendMessage("BleMessageAdapter", "OnBleMessage", message.toJson());
+        } else {
+            message.setError(message.id.isEmpty() ? "Task ID is empty." : "Command is empty.");
+            message.hasError = true;
             UnityPlayer.UnitySendMessage("BleMessageAdapter", "OnBleMessage", message.toJson());
         }
     }

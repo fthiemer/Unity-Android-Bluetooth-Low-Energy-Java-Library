@@ -71,12 +71,12 @@ public class UnityAndroidBLE {
                 !mBluetoothAdapter.isEnabled()) {
             mBluetoothAdapter.enable();
         } else {
-            //TODO: Ask user to activate bluetooth
-            /*if (!mBluetoothAdapter.isEnabled()) {
+            //TODO: Ask user to activate bluetooth - test this
+            if (!mBluetoothAdapter.isEnabled()) {
                 // Request to enable Bluetooth
                 Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
                 UnityPlayer.currentActivity.startActivityForResult(enableBtIntent, 1);
-            }*/
+            }
         }
 
         // Setup for scanning BLE devices
@@ -153,6 +153,7 @@ public class UnityAndroidBLE {
 
     @TargetApi(Build.VERSION_CODES.S)
     private static boolean checkPermissionsAndroid12AndUp(Context ctx, Activity activity) {
+        //TODO: Check if asking for permission is triggered
         activity.requestPermissions(new String[]{
                 Manifest.permission.BLUETOOTH_SCAN,
                 Manifest.permission.BLUETOOTH_CONNECT,
@@ -228,6 +229,13 @@ public class UnityAndroidBLE {
 
     @SuppressLint("MissingPermission")
     @SuppressWarnings("unused")
+    /**
+     * Get RSSI of BLE device
+     * The Received Signal Strength Indicator (RSSI) is a measure of the power level at the receiver.
+     *  It's measured in decibels, dBm, on a logarithmic scale and is negative.
+     *  A more negative number indicates the device is further away.
+     *  For example, a value of -20 to -30 dBm indicates the device is close while a value of -120 indicates the device is near the limit of detection.
+     */
     // UnityAndroidBLE can't be created without the proper Permissions
     public void getRssiForDevice(String taskId, String deviceAddress) {
         BluetoothDevice device = mDeviceListAdapter.getItem(deviceAddress);
@@ -236,12 +244,9 @@ public class UnityAndroidBLE {
             short rssi = mDeviceListAdapter.getRssi(device);
 
             BleMessage msg = new BleMessage(taskId, "getRssiForDevice");
-
             msg.device = device.getAddress();
             msg.name = device.getName();
-
             msg.base64Data = rssi + "";
-
             sendTaskResponse(msg);
         } else {
             BleMessage msg = new BleMessage(taskId, "getRssiForDevice");

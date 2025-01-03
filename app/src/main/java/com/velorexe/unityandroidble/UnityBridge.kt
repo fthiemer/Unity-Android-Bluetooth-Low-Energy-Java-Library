@@ -1,10 +1,14 @@
 package com.velorexe.unityandroidble
 
+import android.Manifest
 import android.content.Context
+import android.os.Build
 import com.polar.sdk.api.PolarBleApi
 import com.unity3d.player.UnityPlayer
 
 import android.util.Log
+import com.polar.androidblesdk.MainActivity
+import com.polar.androidblesdk.MainActivity.Companion
 import com.polar.sdk.api.PolarBleApiDefaultImpl
 import com.polar.sdk.api.model.*
 import java.util.*
@@ -69,5 +73,25 @@ class UnityBridge private constructor(
                 }
             }
         }
+
+        /**
+         * Check Permissions if not already done somewhere else
+         */
+        fun requestBLEPermissions() {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                requestPermissions(arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT),
+                    MainActivity.PERMISSION_REQUEST_CODE
+                )
+            } else {
+                requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
+                    MainActivity.PERMISSION_REQUEST_CODE
+                )
+            }
+        }
+
+        /**
+         * Scan for Devices
+         */
+
     }
 }

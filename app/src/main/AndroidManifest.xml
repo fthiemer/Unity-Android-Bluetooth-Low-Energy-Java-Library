@@ -3,7 +3,28 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+    <!-- Polar SDK needs Bluetooth scan permission to search for BLE devices.-->
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation"
+        tools:targetApi="s" />
+
+
+    <!-- Legacy Permissions for API 30 (Android Q) or older-->
+    <!-- Allow Polar SDK to connect to paired bluetooth devices. -->
+    <uses-permission
+        android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
+    <!-- Polar SDK needs the fine location permission to get results for Bluetooth scan. -->
+    <uses-permission
+        android:name="android.permission.ACCESS_FINE_LOCATION"
+        android:maxSdkVersion="30" />
+    <!-- The coarse location permission is needed, if fine location permission is requested. -->
+    <uses-permission
+        android:name="android.permission.ACCESS_COARSE_LOCATION"
+        android:maxSdkVersion="30" />
+
+
 
     <application
         android:allowBackup="true"

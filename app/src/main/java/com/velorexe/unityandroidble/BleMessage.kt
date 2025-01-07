@@ -1,77 +1,55 @@
-package com.velorexe.unityandroidble;
+package com.velorexe.unityandroidble
 
-import org.json.JSONException;
-import org.json.JSONObject;
+import org.json.JSONException
+import org.json.JSONObject
 
-/// <summary>
-/// Represents a message that is sent between Unity and the Android plugin.
-/// Properties for the Unity side of things to manage all it's interactions
-/// </summary>
-public class BleMessage {
+/**
+ * Represents a message that is sent between Unity and the Android plugin.
+ * Holds Properties for the Unity side of things to manage all it's interactions
+ */
+class BleMessage(val id: String, val command: String) {
+    var device: String? = null
+    var name: String? = null
 
-    public String id;
-    public String command;
+    var service: String? = null
+    var characteristic: String? = null
 
-    public String device;
-    public String name;
+    var base64Data: String? = null
 
-    public String service;
-    public String characteristic;
+    var jsonData: String? = null
 
-    public String base64Data;
+    var hasError: Boolean = false
+    var errorMessage: String? = null
 
-    public String jsonData;
-
-    public boolean hasError = false;
-    public String errorMessage;
-
-    public BleMessage(String id, String command) {
-        this.id = id;
-        this.command = command;
+    fun setError(errorMessage: String?) {
+        hasError = true
+        this.errorMessage = errorMessage
     }
 
-    public void setError(String errorMessage) {
-        hasError = true;
-        this.errorMessage = errorMessage;
-    }
-
-    public BleMessage setService(String service) {
-        this.service = service;
-        return this;
-    }
-
-    public BleMessage setCharacteristic(String characteristic) {
-        this.characteristic = characteristic;
-        return this;
-    }
-
-    public String toJson() {
-        JSONObject obj = new JSONObject();
+    fun toJsonString(): String {
+        val obj = JSONObject()
 
         try {
-            obj.put("id", id);
-            obj.put("command", command);
+            obj.put("id", id)
+            obj.put("command", command)
 
-            obj.put("device", device);
-            obj.put("name", name);
+            obj.put("device", device)
+            obj.put("name", name)
 
-            obj.put("service", service);
-            obj.put("characteristic", characteristic);
+            obj.put("service", service)
+            obj.put("characteristic", characteristic)
 
-            obj.put("base64Data", base64Data);
-            obj.put("jsonData", jsonData);
+            obj.put("base64Data", base64Data)
+            obj.put("jsonData", jsonData)
 
-            if(hasError) {
-                obj.put("hasError", hasError);
-                obj.put("errorMessage", errorMessage);
-            }
-
-            return obj.toString();
-        }
-        catch(JSONException e) {
-            e.printStackTrace();
+            obj.put("hasError", hasError)
+            obj.put("errorMessage", errorMessage)
+            return obj.toString()
+        } catch (e: JSONException) {
+            //TODO: Kommt die irgendwo an?
+            e.printStackTrace()
         }
 
-        return obj.toString();
+        return obj.toString()
     }
 }

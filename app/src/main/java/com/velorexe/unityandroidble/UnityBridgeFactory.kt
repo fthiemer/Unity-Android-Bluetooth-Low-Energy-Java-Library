@@ -9,6 +9,6 @@ import android.content.Context
  */
 object UnityBridgeFactory {
     fun createUnityBridge(applicationContext: Context, debugModeOn: Boolean, polarDeviceIds: List<String>): UnityBridge.Companion {
-        return UnityBridge.getSingletonReference(applicationContext, debugModeOn, polarDeviceIds)
+        return UnityBridge.getInitializedSingletonReference(applicationContext, debugModeOn, polarDeviceIds)
     }
 }

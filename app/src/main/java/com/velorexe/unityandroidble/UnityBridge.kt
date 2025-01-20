@@ -2,7 +2,8 @@ package com.velorexe.unityandroidble
 
 import android.content.Context
 import android.util.Log
-import com.polar.androidblesdk.MainActivity.Companion.TAG
+import android.widget.Toast
+import com.polar.androidcommunications.api.ble.model.DisInfo
 import com.polar.sdk.api.PolarBleApi
 import com.polar.sdk.api.PolarBleApiCallback
 import com.unity3d.player.UnityPlayer
@@ -26,22 +27,42 @@ class UnityBridge private constructor(
     private val polarDeviceIds: List<String>
 ) {
     companion object {
+        private var H10StreamDisposable: Disposable? = null
         private var scanDisposable: Disposable? = null
-        private var deviceConnected: Boolean = false
+        private var connectToOh1Disposable: Disposable? = null
+        private var connectToH10Disposable: Disposable? = null
+        private var sdkModeEnabledStatus = false
+        private var devicesConnected = 0
+        private var bluetoothEnabled = false
         private lateinit var api: PolarBleApi
         private var debugModeOn by Delegates.notNull<Boolean>()
         private lateinit var polarDeviceIds: List<String>
 
+        /**
+         * Map of all connectable Polar devices found during scan.
+         */
+        private val connectablePolarDevicesInfo: HashMap<String, PolarDeviceInfo> by lazy {
+            HashMap<String, PolarDeviceInfo>()
+        }
+
+        /**
+         * Ordered map of all connected Polar devices.
+         */
+        private val connectedPolarDevicesInfo: LinkedHashMap<String, PolarDeviceInfo> by lazy {
+            LinkedHashMap<String, PolarDeviceInfo>()
+        }
+
         private const val API_LOGGER_TAG = "POLAR API LOGGER"
+        private const val UI_TAG = "UI"
         private const val PERMISSION_REQUEST_CODE = 1
 
         @Volatile
         private var initialized: Boolean = false
         private val lock = Any()
 
-        internal fun getSingletonReference(applicationContext: Context,
-                                 debugModeOn: Boolean,
-                                 polarDeviceIds: List<String>): UnityBridge.Companion {
+        internal fun getInitializedSingletonReference(applicationContext: Context,
+                                                      debugModeOn: Boolean,
+                                                      polarDeviceIds: List<String>): UnityBridge.Companion {
             // Make sure instance is not already initialized, then initialize threadsafe
             if (this.initialized) {
                 return this
@@ -67,67 +88,54 @@ class UnityBridge private constructor(
                             )
                         )
                         this.debugModeOn = debugModeOn
-                        // use features for non-Polar filters
+                        // also use features for non-Polar filters
                         api.setPolarFilter(false)
-                        //TODO: Check Debugging in Unity
+
                         if (debugModeOn) {
                             api.setApiLogger { s: String ->
-                                sendToUnity(BleMessage("API-Logger", s))
+                                BleMessage(API_LOGGER_TAG, s).sendToUnity()
                             }
                         }
+
                         //TODO: Set Callbacks, so they send information to Unity
-                        /* Principle - Polar..CallbackProvider ist Typ von callbacks = helper functions
+                        //Principle - Polar..CallbackProvider ist Typ von callbacks = helper functions
                         // Prinzip in BDEBleApiImpl -> setAPICallback setzt verantwortlichen Callbackprovider
                         // -> Callbacks sind Helperfunktionen, dann Bescheidsagen wie Devicelistener aktiv ist?
-                        //Hmm.. naja Details
-                        // override fun in Kotlin verstehen
-                        //
                         api.setApiCallback(object : PolarBleApiCallback() {
-
                             override fun blePowerStateChanged(powered: Boolean) {
-                                Log.d(TAG, "BLE power: $powered")
+                                BleMessage(API_LOGGER_TAG,"BLE power: $powered").sendToUnity()
                                 bluetoothEnabled = powered
                                 if (powered) {
-                                    enableAllButtons()
-                                    showToast("Phone Bluetooth on")
+                                    BleMessage(UI_TAG,"Phone Bluetooth on").sendToUnity()
                                 } else {
-                                    disableAllButtons()
-                                    showToast("Phone Bluetooth off")
+                                    BleMessage(UI_TAG,"Phone Bluetooth off").sendToUnity()
                                 }
                             }
 
                             override fun deviceConnected(polarDeviceInfo: PolarDeviceInfo) {
-                                Log.d(TAG, "CONNECTED: ${polarDeviceInfo.deviceId}")
-                                deviceId = polarDeviceInfo.deviceId
-                                deviceConnected = true
-                                val buttonText = getString(R.string.disconnect_from_device, deviceId)
-                                toggleButtonDown(connectButton, buttonText)
+                                BleMessage(API_LOGGER_TAG, "CONNECTED: ${polarDeviceInfo.deviceId}").sendToUnity()
+                                connectedPolarDevicesInfo[polarDeviceInfo.deviceId] = polarDeviceInfo
+                                devicesConnected = connectedPolarDevicesInfo.size
                             }
 
                             override fun deviceConnecting(polarDeviceInfo: PolarDeviceInfo) {
-                                Log.d(TAG, "CONNECTING: ${polarDeviceInfo.deviceId}")
+                                BleMessage(API_LOGGER_TAG, "CONNECTING: ${polarDeviceInfo.deviceId}").sendToUnity()
                             }
 
                             override fun deviceDisconnected(polarDeviceInfo: PolarDeviceInfo) {
-                                Log.d(TAG, "DISCONNECTED: ${polarDeviceInfo.deviceId}")
-                                deviceConnected = false
-                                val buttonText = getString(R.string.connect_to_device, deviceId)
-                                toggleButtonUp(connectButton, buttonText)
-                                toggleButtonUp(toggleSdkModeButton, R.string.enable_sdk_mode)
+                                connectedPolarDevicesInfo.remove(polarDeviceInfo.deviceId)
+                                devicesConnected = connectedPolarDevicesInfo.size
+                                BleMessage(API_LOGGER_TAG, "DISCONNECTED: ${polarDeviceInfo.deviceId}").sendToUnity()
                             }
 
-                            override fun disInformationReceived(identifier: String, uuid: UUID, value: String) {
-                                Log.d(TAG, "DIS INFO uuid: $uuid value: $value")
+                            override fun disInformationReceived(identifier: String, disInfo: DisInfo) {
+                                BleMessage(API_LOGGER_TAG, "identifier: $identifier value: $disInfo").sendToUnity()
                             }
 
                             override fun batteryLevelReceived(identifier: String, level: Int) {
-                                Log.d(TAG, "BATTERY LEVEL: $level")
+                                BleMessage(API_LOGGER_TAG, "BATTERY LEVEL: $level").sendToUnity()
                             }
-
-                            override fun hrNotificationReceived(identifier: String, data: PolarHrData.PolarHrSample) {
-                                // deprecated
-                            }
-                        })*/
+                        })
                         return this
                     }
                 }
@@ -135,75 +143,155 @@ class UnityBridge private constructor(
         }
 
         /**
-         * Check Permissions if not already done somewhere else - Right now done in AndroidManifest.xml
+         * Check Permissions and initialization if not already done somewhere else
+         * - Right now done in AndroidManifest.xml
          */
+
 
 
         /**
-         * Scan for Devices
+         * Scan for all available Devices.
+         * Actualize DeviceList.
+         * Send all necessary Device Information to Unity.
          */
-        fun scanForDevices () {
-            //TODO: Disposable verstehen und gucken ob Elvis Operator hier notwendig
-            // Disposable scheint mit einer Funktione beladen zu werden. Sobald das
-            // Disposable disposed wird, wird
-            // TODO: Logs mit UnityMessages ersetzen
-            val isDisposed = scanDisposable?.isDisposed ?: true
-            if (isDisposed) {
+        fun scanForDevices(polarOnly: Boolean) {
+            synchronized(lock) {
+                api.setPolarFilter(polarOnly)
+                scanDisposable?.dispose()
+
                 scanDisposable = api.searchForDevice()
                     .observeOn(AndroidSchedulers.mainThread())
                     .subscribe(
                         { polarDeviceInfo: PolarDeviceInfo ->
-                            Log.d("scanForDevice", "polar device found id: " + polarDeviceInfo.deviceId + " address: " + polarDeviceInfo.address + " rssi: " + polarDeviceInfo.rssi + " name: " + polarDeviceInfo.name + " isConnectable: " + polarDeviceInfo.isConnectable)
+                            connectablePolarDevicesInfo[polarDeviceInfo.deviceId] = polarDeviceInfo
+                            val message = BleMessage("SCAN_FOR_DEVICE", "Device Found").apply {
+                                device = polarDeviceInfo.deviceId
+                                name = polarDeviceInfo.name
+                                deviceInfo = polarDeviceInfo
+                            }
+                            message.sendToUnity()
                         },
                         { error: Throwable ->
-                            Log.e("scanForDevice", "Device scan failed. Reason $error")
+                            val errorMessage = BleMessage("SCAN_FOR_DEVICE_ERROR", "Scan Failed").apply {
+                                setError("Device scan failed. Reason: $error")
+                            }
+                            errorMessage.sendToUnity()
                         },
                         {
-                            Log.d("scanForDevice", "complete")
+                            val completeMessage = BleMessage("SCAN_FOR_DEVICE_COMPLETE", "Complete")
+                            completeMessage.sendToUnity()
+                            scanDisposable?.dispose()
+                        }
+                    )
+            }
+        }
+
+
+
+        /**
+         * Connect to a device via Polar API, invoking related callback.
+         *
+         * @param deviceId Polar device id found printed on the sensor/ device or bt address (in format "00:11:22:33:44:55"
+         */
+        fun connectToDevice(deviceId: String) {
+            try {
+                api.connectToDevice(deviceId)
+            } catch (polarInvalidArgument: PolarInvalidArgument) {
+                val message = BleMessage(API_LOGGER_TAG,"Connect To Device")
+                message.setError("Failed to connect. Reason $polarInvalidArgument")
+                message.sendToUnity()
+            }
+        }
+        
+        /**
+         * Use the autoconnect feature of the Polar SDK to connect to a device by device type.
+         * Invoking related callback.
+         */
+        fun connectToPolarDeviceOfType(deviceType: String, rssiLimit : Int = -60, service: String? = "180D") {
+            if (deviceType == "OH1") {
+                connectToOh1Disposable = api.autoConnectToDevice(rssiLimit, service, deviceType)
+                    .subscribe(
+                        { val message = BleMessage(API_LOGGER_TAG,"Connect To Device Of Type $deviceType")
+                            message.sendToUnity()
+                            connectToOh1Disposable?.dispose()
+                        },
+                        {throwable: Throwable ->
+                            val message = BleMessage(API_LOGGER_TAG,"Connect To Device Of Type $deviceType")
+                            message.setError("Failed to connect. Reason: $throwable")
+                            message.sendToUnity()
+                            connectToOh1Disposable?.dispose()
+                        }
+                    )
+            } else if (deviceType == "H10") {
+                connectToH10Disposable = api.autoConnectToDevice(rssiLimit, service, deviceType)
+                    .subscribe(
+                        { val message = BleMessage(API_LOGGER_TAG,"Connect To Device Of Type $deviceType")
+                            message.sendToUnity()
+                            connectToH10Disposable?.dispose()
+                        },
+                        {throwable: Throwable ->
+                            val message = BleMessage(API_LOGGER_TAG,"Connect To Device Of Type $deviceType")
+                            message.setError("Failed to connect. Reason: $throwable")
+                            message.sendToUnity()
+                            connectToH10Disposable?.dispose()
                         }
                     )
             } else {
-                toggleButtonUp(scanButton, "Scan devices")
-                scanDisposable?.dispose()
+                val message = BleMessage(API_LOGGER_TAG,"Connect To Device")
+                message.setError("Failed to connect. Reason: Device $deviceType not supported.")
+                message.sendToUnity()
             }
         }
 
+
         /**
-         * Connect to Device
+         * Stream HR and RR Intervalls from Polar H10.
          */
-        fun connectToDevice(deviceId: String) {
-            //TODO: Scheint sich nur zu einem Device zu connecten. Ich brauche aber 3 parallel XD
-            //      Über threads regeln?
-            try {
-                if (deviceConnected) {
+        fun startH10Stream(deviceId: String) {
+            val isDisposed = H10StreamDisposable?.isDisposed ?: true
+            if (isDisposed) {
+                H10StreamDisposable = api.startHrStreaming(deviceId)
+                    .observeOn(AndroidSchedulers.mainThread())
+                    .subscribe(
+                        { hrData: PolarHrData ->
+                            val message = BleMessage(API_LOGGER_TAG,"H10 HR Stream data")
+                            message.jsonData = Json.encodeToString(hrData)
+                            message.sendToUnity()
+                        },
+                        { error: Throwable ->
+                            val message = BleMessage(API_LOGGER_TAG,"H10 HR Stream Error")
+                            message.setError("HR stream failed. Reason $error")
+                            message.sendToUnity()
+                            H10StreamDisposable?.dispose()
+                        },
+                        { val message = BleMessage(API_LOGGER_TAG,"H10 HR Stream Complete")
+                            message.sendToUnity()
+                            H10StreamDisposable?.dispose()
+                        }
+                    )
+                }
+        }
+
+
+
+
+        /**
+         * Reconnect if stream is lost.
+          */
+
+
+        /**
+         * Iterate through all connected devices. Close all streams. Disconnect from all. Dispose all disposables.
+         */
+        fun disposeAll() {
+            synchronized(lock) {
+                connectedPolarDevicesInfo.forEach { (deviceId, _) ->
                     api.disconnectFromDevice(deviceId)
-                } else {
-                    api.connectToDevice(deviceId)
                 }
-            } catch (polarInvalidArgument: PolarInvalidArgument) {
-                val attempt = if (deviceConnected) {
-                    "disconnect"
-                } else {
-                    "connect"
-                }
-                //TODO: Funktioniert Log.e für Unity auch?
-                Log.e("connectToDevice", "Failed to $attempt. Reason $polarInvalidArgument ")
-            }
-        }
-
-
-
-        /**
-        * Sends a [BleMessage] to Unity.
-         *
-         * @param message The [BleMessage] to send to Unity.
-         */
-        fun sendToUnity(message: BleMessage) {
-            if (message.id.isNotEmpty() && message.command.isNotEmpty()) {
-                UnityPlayer.UnitySendMessage("BleMessageAdapter", "OnBleMessage", message.toJsonString())
-            } else {
-                message.setError(if (message.id.isEmpty()) "Task ID is empty." else "Command is empty.")
-                UnityPlayer.UnitySendMessage("BleMessageAdapter", "OnBleMessage", message.toJsonString())
+                connectedPolarDevicesInfo.clear()
+                devicesConnected = 0
+                scanDisposable?.dispose()
+                autoConnectDisposable?.dispose()
             }
         }
     }

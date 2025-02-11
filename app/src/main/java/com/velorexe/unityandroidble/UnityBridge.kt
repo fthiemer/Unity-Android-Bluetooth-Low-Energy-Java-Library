@@ -6,6 +6,10 @@ import android.widget.Toast
 import com.polar.androidcommunications.api.ble.model.DisInfo
 import com.polar.sdk.api.PolarBleApi
 import com.polar.sdk.api.PolarBleApiCallback
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import com.unity3d.player.UnityPlayer
 
 import com.polar.sdk.api.PolarBleApiDefaultImpl

@@ -2,8 +2,12 @@ package com.velorexe.unityandroidble
 
 import com.polar.sdk.api.model.PolarDeviceInfo
 import com.unity3d.player.UnityPlayer
-import org.json.JSONException
+import org.json.JSONException //easy to use JSON library, manuelles Zuweisen
 import org.json.JSONObject
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 /**
  * Represents a message that is sent between Unity and the Android plugin.

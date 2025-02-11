@@ -66,7 +66,7 @@ class UnityBridge private constructor(
 
         internal fun getInitializedSingletonReference(applicationContext: Context,
                                                       debugModeOn: Boolean,
-                                                      polarDeviceIds: List<String>): UnityBridge.Companion {
+                                                      polarDeviceIds: List<String>): Companion {
             // Make sure instance is not already initialized, then initialize threadsafe
             if (this.initialized) {
                 return this
@@ -295,7 +295,6 @@ class UnityBridge private constructor(
                 connectedPolarDevicesInfo.clear()
                 devicesConnected = 0
                 scanDisposable?.dispose()
-                autoConnectDisposable?.dispose()
             }
         }
     }

@@ -12,8 +12,10 @@ import kotlinx.serialization.json.put
 /**
  * Represents a message that is sent between Unity and the Android plugin.
  * Holds Properties for the Unity side of things to manage all it's interactions
+ * id: PolarDeviceID or MacAddress
+ * command: relevant method name
  */
-data class BleMessage(val id: String, val command: String) {
+data class BleMessage(val id: String, val command: String, val message: String) {
     var device: String? = null
     var name: String? = null
 
@@ -38,12 +40,15 @@ data class BleMessage(val id: String, val command: String) {
      * @param message The [BleMessage] to send to Unity.
      */
     fun sendToUnity() {
-        //TODO: einfacherer Weg für für Errors (s. Connect to Device)
-        if (this.id.isNotEmpty() && this.command.isNotEmpty()) {
-            UnityPlayer.UnitySendMessage("BleMessageAdapter", "OnBleMessage", this.toJsonString())
-        } else {
-            this.setError(if (this.id.isEmpty()) "Task ID is empty." else "Command is empty.")
-            UnityPlayer.UnitySendMessage("BleMessageAdapter", "OnBleMessage", this.toJsonString())
+        try {
+            if (this.id.isNotEmpty() && this.command.isNotEmpty()) {
+                UnityPlayer.UnitySendMessage("BleManager", "OnBleMessage", this.toJsonString())
+            } else {
+                this.setError(if (this.id.isEmpty()) "Task ID is empty." else "Command is empty.")
+                UnityPlayer.UnitySendMessage("BleManager", "OnBleMessage", this.toJsonString())
+            }
+        } catch (e: Exception) {
+            this.setError(e.message)
         }
     }
 
@@ -58,6 +63,7 @@ data class BleMessage(val id: String, val command: String) {
         try {
             obj.put("id", id)
             obj.put("command", command)
+            obj.put("message", message)
 
             obj.put("device", device)
             obj.put("deviceInfo", deviceInfo)

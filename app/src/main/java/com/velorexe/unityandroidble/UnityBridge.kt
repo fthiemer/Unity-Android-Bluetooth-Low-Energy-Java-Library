@@ -1,37 +1,36 @@
 package com.velorexe.unityandroidble
 
+import android.app.Activity
 import android.content.Context
-import android.util.Log
-import android.widget.Toast
 import com.polar.androidcommunications.api.ble.model.DisInfo
 import com.polar.sdk.api.PolarBleApi
 import com.polar.sdk.api.PolarBleApiCallback
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
-import com.unity3d.player.UnityPlayer
-
 import com.polar.sdk.api.PolarBleApiDefaultImpl
 import com.polar.sdk.api.errors.PolarInvalidArgument
 import com.polar.sdk.api.model.PolarDeviceInfo
 import com.polar.sdk.api.model.PolarHrData
+import com.polar.sdk.api.model.PolarPpiData
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
 import io.reactivex.rxjava3.disposables.Disposable
-import java.util.UUID
+import kotlinx.serialization.json.Json
+import com.unity3d.player.UnityPlayer
 import kotlin.properties.Delegates
 
-
 /**
- * Instance created by [UnityBridgeFactory] to make Unity able to access relevant PolarSDK functions
+ * UnityBridge: Stellt die Verbindung zwischen Unity und der Polar BLE API her.
+ * Erweiterungen: Zeitsynchronisation, parallele Verbindung von H10 und OH1,
+ * HR/PPI-Streaming mit CSV-Logging, Biofeedback-Berechnung, u.a.
  */
 class UnityBridge private constructor(
-    private val applicationContext: Context,
+    private val unityActivity: Activity,
     private val debugModeOn: Boolean,
     private val polarDeviceIds: List<String>
 ) {
     companion object {
+        lateinit var unityActivity: Activity
+            private set
         private var H10StreamDisposable: Disposable? = null
+        private var oh1StreamDisposable: Disposable? = null
         private var scanDisposable: Disposable? = null
         private var connectToOh1Disposable: Disposable? = null
         private var connectToH10Disposable: Disposable? = null
@@ -42,32 +41,30 @@ class UnityBridge private constructor(
         private var debugModeOn by Delegates.notNull<Boolean>()
         private lateinit var polarDeviceIds: List<String>
 
-        /**
-         * Map of all connectable Polar devices found during scan.
-         */
-        private val connectablePolarDevicesInfo: HashMap<String, PolarDeviceInfo> by lazy {
-            HashMap<String, PolarDeviceInfo>()
-        }
-
-        /**
-         * Ordered map of all connected Polar devices.
-         */
-        private val connectedPolarDevicesInfo: LinkedHashMap<String, PolarDeviceInfo> by lazy {
-            LinkedHashMap<String, PolarDeviceInfo>()
-        }
+        // Für Zeitsynchronisation
+        private var pingTimestamp: Long = 0
+        private var latency: Long = 0
 
         private const val API_LOGGER_TAG = "POLAR API LOGGER"
         private const val UI_TAG = "UI"
         private const val PERMISSION_REQUEST_CODE = 1
 
+        // Verwaltung der gefundenen und verbundenen Geräte, initialized on first call
+        private val connectablePolarDevicesInfo: HashMap<String, PolarDeviceInfo> by lazy { HashMap() }
+        private val connectedPolarDevicesInfo: LinkedHashMap<String, PolarDeviceInfo> by lazy { LinkedHashMap() }
+        private val connectedStreamDisposables: LinkedHashMap<String, LinkedHashMap<PolarBleApi.PolarDeviceDataType,Disposable>> by lazy { LinkedHashMap() }
+
+
+
         @Volatile
         private var initialized: Boolean = false
         private val lock = Any()
-
-        internal fun getInitializedSingletonReference(applicationContext: Context,
-                                                      debugModeOn: Boolean,
-                                                      polarDeviceIds: List<String>): Companion {
-            // Make sure instance is not already initialized, then initialize threadsafe
+        //threadsafe singleton
+        internal fun getInitializedSingletonReference(
+            unityActivity: Context,
+            debugModeOn: Boolean,
+            polarDeviceIds: List<String>
+        ): UnityBridge.Companion {
             if (this.initialized) {
                 return this
             } else {
@@ -76,9 +73,8 @@ class UnityBridge private constructor(
                         return this
                     } else {
                         initialized = true
-                        //Set variables
                         api = PolarBleApiDefaultImpl.defaultImplementation(
-                            applicationContext,
+                            unityActivity,
                             setOf(
                                 PolarBleApi.PolarBleSdkFeature.FEATURE_HR,
                                 PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_SDK_MODE,
@@ -92,50 +88,34 @@ class UnityBridge private constructor(
                             )
                         )
                         this.debugModeOn = debugModeOn
-                        // also use features for non-Polar filters
                         api.setPolarFilter(false)
-
                         if (debugModeOn) {
                             api.setApiLogger { s: String ->
                                 BleMessage(API_LOGGER_TAG, s).sendToUnity()
                             }
                         }
-
-                        //TODO: Set Callbacks, so they send information to Unity
-                        //Principle - Polar..CallbackProvider ist Typ von callbacks = helper functions
-                        // Prinzip in BDEBleApiImpl -> setAPICallback setzt verantwortlichen Callbackprovider
-                        // -> Callbacks sind Helperfunktionen, dann Bescheidsagen wie Devicelistener aktiv ist?
                         api.setApiCallback(object : PolarBleApiCallback() {
                             override fun blePowerStateChanged(powered: Boolean) {
-                                BleMessage(API_LOGGER_TAG,"BLE power: $powered").sendToUnity()
+                                BleMessage(API_LOGGER_TAG, "BLE power: $powered").sendToUnity()
                                 bluetoothEnabled = powered
-                                if (powered) {
-                                    BleMessage(UI_TAG,"Phone Bluetooth on").sendToUnity()
-                                } else {
-                                    BleMessage(UI_TAG,"Phone Bluetooth off").sendToUnity()
-                                }
+                                BleMessage(UI_TAG, if (powered) "Phone Bluetooth on" else "Phone Bluetooth off").sendToUnity()
                             }
-
                             override fun deviceConnected(polarDeviceInfo: PolarDeviceInfo) {
                                 BleMessage(API_LOGGER_TAG, "CONNECTED: ${polarDeviceInfo.deviceId}").sendToUnity()
                                 connectedPolarDevicesInfo[polarDeviceInfo.deviceId] = polarDeviceInfo
                                 devicesConnected = connectedPolarDevicesInfo.size
                             }
-
                             override fun deviceConnecting(polarDeviceInfo: PolarDeviceInfo) {
                                 BleMessage(API_LOGGER_TAG, "CONNECTING: ${polarDeviceInfo.deviceId}").sendToUnity()
                             }
-
                             override fun deviceDisconnected(polarDeviceInfo: PolarDeviceInfo) {
                                 connectedPolarDevicesInfo.remove(polarDeviceInfo.deviceId)
                                 devicesConnected = connectedPolarDevicesInfo.size
                                 BleMessage(API_LOGGER_TAG, "DISCONNECTED: ${polarDeviceInfo.deviceId}").sendToUnity()
                             }
-
                             override fun disInformationReceived(identifier: String, disInfo: DisInfo) {
                                 BleMessage(API_LOGGER_TAG, "identifier: $identifier value: $disInfo").sendToUnity()
                             }
-
                             override fun batteryLevelReceived(identifier: String, level: Int) {
                                 BleMessage(API_LOGGER_TAG, "BATTERY LEVEL: $level").sendToUnity()
                             }
@@ -146,147 +126,209 @@ class UnityBridge private constructor(
             }
         }
 
+        // –––––––––––––––––––––––––––––––––––––––––––––––––––
+        // 1. Zeitsynchronisation & SetLocalTime
+        // –––––––––––––––––––––––––––––––––––––––––––––––––––
         /**
-         * Check Permissions and initialization if not already done somewhere else
-         * - Right now done in AndroidManifest.xml
+         * Setzt (sofern unterstützt) die Gerätezeit des Polar-Geräts auf die aktuelle Systemzeit.
+         * Hinweis: Bei einigen Sensoren (z. B. H10) muss der Stream vor dem Entfernen des Sensors beendet werden.
          */
-
-
-
-        /**
-         * Scan for all available Devices.
-         * Actualize DeviceList.
-         * Send all necessary Device Information to Unity.
-         */
-        fun scanForDevices(polarOnly: Boolean) {
-            synchronized(lock) {
-                api.setPolarFilter(polarOnly)
-                scanDisposable?.dispose()
-
-                scanDisposable = api.searchForDevice()
-                    .observeOn(AndroidSchedulers.mainThread())
-                    .subscribe(
-                        { polarDeviceInfo: PolarDeviceInfo ->
-                            connectablePolarDevicesInfo[polarDeviceInfo.deviceId] = polarDeviceInfo
-                            val message = BleMessage("SCAN_FOR_DEVICE", "Device Found").apply {
-                                device = polarDeviceInfo.deviceId
-                                name = polarDeviceInfo.name
-                                deviceInfo = polarDeviceInfo
-                            }
-                            message.sendToUnity()
-                        },
-                        { error: Throwable ->
-                            val errorMessage = BleMessage("SCAN_FOR_DEVICE_ERROR", "Scan Failed").apply {
-                                setError("Device scan failed. Reason: $error")
-                            }
-                            errorMessage.sendToUnity()
-                        },
-                        {
-                            val completeMessage = BleMessage("SCAN_FOR_DEVICE_COMPLETE", "Complete")
-                            completeMessage.sendToUnity()
-                            scanDisposable?.dispose()
-                        }
-                    )
-            }
-        }
-
-
-
-        /**
-         * Connect to a device via Polar API, invoking related callback.
-         *
-         * @param deviceId Polar device id found printed on the sensor/ device or bt address (in format "00:11:22:33:44:55"
-         */
-        fun connectToDevice(deviceId: String) {
+        fun setDeviceTime(deviceId: String) {
             try {
-                api.connectToDevice(deviceId)
-            } catch (polarInvalidArgument: PolarInvalidArgument) {
-                val message = BleMessage(API_LOGGER_TAG,"Connect To Device")
-                message.setError("Failed to connect. Reason $polarInvalidArgument")
-                message.sendToUnity()
+                BleMessage("TIME_SYNC", "Device time $deviceId is set to ${api.getLocalTime(deviceId)}").sendToUnity()
+                // Falls die API eine Methode anbietet, z. B.:
+                val calendar = java.util.Calendar.getInstance()
+                api.setLocalTime(deviceId, calendar);
+                BleMessage("TIME_SYNC", "Try to set device time for $deviceId " +
+                        "to ${calendar.timeInMillis}, it is currently " +
+                        "set to ${api.getLocalTime(deviceId)}. Most likely restart needed to apply.").sendToUnity()
+            } catch (e: Exception) {
+                BleMessage("TIME_SYNC", "Error setting device time for $deviceId: ${e.localizedMessage}").sendToUnity()
             }
         }
-        
-        /**
-         * Use the autoconnect feature of the Polar SDK to connect to a device by device type.
-         * Invoking related callback.
-         */
-        fun connectToPolarDeviceOfType(deviceType: String, rssiLimit : Int = -60, service: String? = "180D") {
-            if (deviceType == "OH1") {
-                connectToOh1Disposable = api.autoConnectToDevice(rssiLimit, service, deviceType)
-                    .subscribe(
-                        { val message = BleMessage(API_LOGGER_TAG,"Connect To Device Of Type $deviceType")
-                            message.sendToUnity()
-                            connectToOh1Disposable?.dispose()
-                        },
-                        {throwable: Throwable ->
-                            val message = BleMessage(API_LOGGER_TAG,"Connect To Device Of Type $deviceType")
-                            message.setError("Failed to connect. Reason: $throwable")
-                            message.sendToUnity()
-                            connectToOh1Disposable?.dispose()
-                        }
-                    )
-            } else if (deviceType == "H10") {
-                connectToH10Disposable = api.autoConnectToDevice(rssiLimit, service, deviceType)
-                    .subscribe(
-                        { val message = BleMessage(API_LOGGER_TAG,"Connect To Device Of Type $deviceType")
-                            message.sendToUnity()
-                            connectToH10Disposable?.dispose()
-                        },
-                        {throwable: Throwable ->
-                            val message = BleMessage(API_LOGGER_TAG,"Connect To Device Of Type $deviceType")
-                            message.setError("Failed to connect. Reason: $throwable")
-                            message.sendToUnity()
-                            connectToH10Disposable?.dispose()
-                        }
-                    )
-            } else {
-                val message = BleMessage(API_LOGGER_TAG,"Connect To Device")
-                message.setError("Failed to connect. Reason: Device $deviceType not supported.")
-                message.sendToUnity()
+
+        fun getDeviceTime(deviceId: String) {
+            try {
+                val deviceTime = api.getLocalTime(deviceId)
+                val systemTime = java.util.Calendar.getInstance()
+                BleMessage("TIME_SYNC", "Device time $deviceId is set " +
+                        "to ${deviceTime}. System time is ${systemTime}.").sendToUnity()
+            } catch (e: Exception) {
+                BleMessage("TIME_SYNC", "Error getting device time for $deviceId: ${e.localizedMessage}").sendToUnity()
+            }
+        }
+
+//        /**
+//         * Sendet einen Ping an Unity, um die Latenz (Ping-Pong-Zeit) zu ermitteln.
+//         */
+//        fun synchronizeTime() {
+//            pingTimestamp = System.currentTimeMillis()
+//            val pingMessage = BleMessage("TIME_SYNC", "Ping")
+//            pingMessage.jsonData = pingTimestamp.toString()
+//            sendToUnity(pingMessage)
+//        }
+//
+//        /**
+//         * Wird von Unity aufgerufen, wenn ein Pong empfangen wurde.
+//         * unityTime: Der Zeitstempel von Unity.
+//         */
+//        fun onUnityPong(unityTime: Long) {
+//            val currentTime = System.currentTimeMillis()
+//            latency = (currentTime - pingTimestamp) / 2  // One-Way-Latenz
+//            BleMessage("TIME_SYNC", "Latency: $latency ms").sendToUnity()
+//        }
+
+        // –––––––––––––––––––––––––––––––––––––––––––––––––––
+        // 2. Gleichzeitiger Verbindungsaufbau zu H10 und OH1
+        // –––––––––––––––––––––––––––––––––––––––––––––––––––
+
+        fun connectToH10AndOH1(h10DeviceId: String, oh1DeviceId: String) {
+            try {
+                api.connectToDevice(h10DeviceId)
+                api.connectToDevice(oh1DeviceId)
+                BleMessage(API_LOGGER_TAG, "Connecting to H10 and OH1").sendToUnity()
+            } catch (e: PolarInvalidArgument) {
+                BleMessage(API_LOGGER_TAG, "Connect error: ${e.localizedMessage}").sendToUnity()
+            }
+            for (deviceInformation in connectedPolarDevicesInfo) {
+                BleMessage(API_LOGGER_TAG, "Connected device information: $deviceInformation.").sendToUnity()
+            }
+        }
+
+        fun endAllConnectedDeviceStreams() {
+            for (deviceInformation in connectedStreamDisposables) {
+                connectedStreamDisposables[deviceInformation.key]?.values?.forEach {disposable ->
+                    disposable.dispose()
+                }
             }
         }
 
 
-        /**
-         * Stream HR and RR Intervalls from Polar H10.
-         */
+        // –––––––––––––––––––––––––––––––––––––––––––––––––––
+        // 3. HR-Streaming (H10), CSV-Logging & Biofeedback (Stress-Erfassung)
+        // –––––––––––––––––––––––––––––––––––––––––––––––––––
+        //TODO: Setup so, dass ich wieder reconnecten kann
         fun startH10Stream(deviceId: String) {
+            var H10StreamDisposable = connectedStreamDisposables[deviceId]?.get(PolarBleApi.PolarDeviceDataType.HR)
             val isDisposed = H10StreamDisposable?.isDisposed ?: true
             if (isDisposed) {
                 H10StreamDisposable = api.startHrStreaming(deviceId)
                     .observeOn(AndroidSchedulers.mainThread())
                     .subscribe(
                         { hrData: PolarHrData ->
-                            val message = BleMessage(API_LOGGER_TAG,"H10 HR Stream data")
+                            // Für HR/PPI in H10: Hinweis – wenn PPI aktiviert ist, werden HR-Daten nur alle 5 Sekunden aktualisiert.
+                            val timestamp = System.currentTimeMillis()
+                            // Alternative: Falls gewünscht, können Timestamps in Nanosekunden erzeugt werden:
+                            // val nsTimestamp = System.nanoTime() + 946684800000000000L
+                            val rrValues = hrData.samples.map { it.rrsMs }
+                            val rrString = if (rrValues.isNotEmpty()) rrValues.joinToString(separator = "|") else "NA"
+                            val csvLine = "$timestamp,${hrData.samples.firstOrNull()?.hr ?: 0},$rrString"
+                            CsvLogger.logData(csvLine)
+
+                            val message = BleMessage(API_LOGGER_TAG, "H10 HR Stream data")
                             message.jsonData = Json.encodeToString(hrData)
                             message.sendToUnity()
+
+                            processBiofeedback(hrData)
                         },
                         { error: Throwable ->
-                            val message = BleMessage(API_LOGGER_TAG,"H10 HR Stream Error")
-                            message.setError("HR stream failed. Reason $error")
+                            val message = BleMessage(API_LOGGER_TAG, "H10 HR Stream Error")
+                            message.setError("HR stream failed: $error")
                             message.sendToUnity()
                             H10StreamDisposable?.dispose()
                         },
-                        { val message = BleMessage(API_LOGGER_TAG,"H10 HR Stream Complete")
+                        {
+                            val message = BleMessage(API_LOGGER_TAG, "H10 HR Stream Complete")
                             message.sendToUnity()
                             H10StreamDisposable?.dispose()
                         }
                     )
-                }
+                requestFullStreamSettings(deviceId)
+                connectedStreamDisposables[deviceId] = LinkedHashMap()
+                connectedStreamDisposables[deviceId]!![PolarBleApi.PolarDeviceDataType.HR] = H10StreamDisposable
+            }
         }
 
-
-
-
         /**
-         * Reconnect if stream is lost.
-          */
-
-
-        /**
-         * Iterate through all connected devices. Close all streams. Disconnect from all. Dispose all disposables.
+         * Berechnet einen Stress-Index basierend auf HR und HRV (RMSSD).
+         * Formel (angelehnt an die Task Force der ESC, 1996):
+         *     stressLevel = HR / (RMSSD + 1)
+         * RMSSD: Root Mean Square of Successive Differences.
          */
+        //TODO: Fix this shiit
+        private fun processBiofeedback(hrData: PolarHrData) {
+            val hr = hrData.samples.firstOrNull()?.hr ?: 0
+            val rrIntervals = hrData.samples.map { it.rrsMs }
+            if (rrIntervals.size < 2) return
+            //val successiveDiffs = rrIntervals.zipWithNext { a, b -> (b - a) * (b - a) }
+            //val rmssd = sqrt(successiveDiffs.average())
+            //val stressLevel = hr.toDouble() / (rmssd + 1)
+            //val bioFeedbackMessage = BleMessage("BIOFEEDBACK", "Stress level: $stressLevel (HR: $hr, RMSSD: $rmssd)")
+            //bioFeedbackMessage.sendToUnity()
+        }
+
+        // –––––––––––––––––––––––––––––––––––––––––––––––––––
+        // 4. OH1 Streaming (PPI)
+        // –––––––––––––––––––––––––––––––––––––––––––––––––––
+        /**
+         * Startet den PPI-Stream für ein Polar OH1-Gerät.
+         * Wichtige Hinweise:
+         * - Wenn PPI-Aufzeichnung aktiviert ist, wird HR nur alle 5 Sekunden aktualisiert und erste Daten kommen nach ca. 25 Sekunden.
+         *
+         * Annahme: PolarPpiData und PolarPpiSample besitzen folgende Felder:
+         *   - ppi: Int
+         *   - skinContactFlag: Int   (1 = Kontakt vorhanden)
+         *   - motionDetectedFlag: Int  (1 = Bewegung erkannt)
+         */
+        fun startOH1Stream(deviceId: String) {
+            val isDisposed = oh1StreamDisposable?.isDisposed ?: true
+            if (isDisposed) {
+                oh1StreamDisposable = api.startPpiStreaming(deviceId)
+                    .observeOn(AndroidSchedulers.mainThread())
+                    .subscribe(
+                        { ppiData: PolarPpiData ->
+                            //TODO: Synchronisation überdenken, wahrshcl. nicht sinnvoll local time des devices zu nehmeen
+                            val timestamp = System.currentTimeMillis()
+                            // Beispielhaft: Berechne den Durchschnitt der PPI-Werte
+                            val avgPpi = if (ppiData.samples.isNotEmpty()) ppiData.samples.map { it.ppi }.average() else 0.0
+                            val csvLine = "$timestamp,$avgPpi"
+                            CsvLogger.logData(csvLine)
+
+                            val message = BleMessage(API_LOGGER_TAG, "OH1 PPI Stream data")
+                            message.jsonData = Json.encodeToString(ppiData)
+                            message.sendToUnity()
+
+                            // Optional: Hier können zusätzliche Biofeedback-Berechnungen für OH1 erfolgen.
+                        },
+                        { error: Throwable ->
+                            val message = BleMessage(API_LOGGER_TAG, "OH1 PPI Stream Error")
+                            message.setError("OH1 PPI stream failed: $error")
+                            message.sendToUnity()
+                            oh1StreamDisposable?.dispose()
+                        },
+                        {
+                            val message = BleMessage(API_LOGGER_TAG, "OH1 PPI Stream Complete")
+                            message.sendToUnity()
+                            oh1StreamDisposable?.dispose()
+                        }
+                    )
+                requestFullStreamSettings(deviceId)
+                connectedStreamDisposables[deviceId] = LinkedHashMap()
+                connectedStreamDisposables[deviceId]!![PolarBleApi.PolarDeviceDataType.HR] =
+                    oh1StreamDisposable!!
+            }
+        }
+
+        // –––––––––––––––––––––––––––––––––––––––––––––––––––
+        // 5. Request Full Stream Settings (Stub)
+        // –––––––––––––––––––––––––––––––––––––––––––––––––––
+        fun requestFullStreamSettings(deviceId: String) {
+            BleMessage("STREAM_SETTINGS", "Requested full stream settings for $deviceId").sendToUnity()
+        }
+
+        // –––––––––––––––––––––––––––––––––––––––––––––––––––
+        // Dispose: Aufräumarbeiten
+        // –––––––––––––––––––––––––––––––––––––––––––––––––––
         fun disposeAll() {
             synchronized(lock) {
                 connectedPolarDevicesInfo.forEach { (deviceId, _) ->
@@ -295,7 +337,15 @@ class UnityBridge private constructor(
                 connectedPolarDevicesInfo.clear()
                 devicesConnected = 0
                 scanDisposable?.dispose()
+                H10StreamDisposable?.dispose()
+                oh1StreamDisposable?.dispose()
+                connectToH10Disposable?.dispose()
+                connectToOh1Disposable?.dispose()
             }
+        }
+
+        fun sendToUnity(message: BleMessage) {
+            UnityPlayer.UnitySendMessage("BleMessageAdapter", "OnBleMessage", message.toJsonString())
         }
     }
 }

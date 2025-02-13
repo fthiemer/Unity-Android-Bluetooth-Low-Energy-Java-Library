@@ -1,6 +1,5 @@
 package com.velorexe.unityandroidble
 
-import android.app.Activity
 import android.content.Context
 import com.polar.androidcommunications.api.ble.model.DisInfo
 import com.polar.sdk.api.PolarBleApi
@@ -22,13 +21,11 @@ import kotlin.properties.Delegates
  * HR/PPI-Streaming mit CSV-Logging, Biofeedback-Berechnung, u.a.
  */
 class UnityBridge private constructor(
-    private val unityActivity: Activity,
+    private val unityActivity: Context,
     private val debugModeOn: Boolean,
     private val polarDeviceIds: List<String>
 ) {
     companion object {
-        lateinit var unityActivity: Activity
-            private set
         private var H10StreamDisposable: Disposable? = null
         private var oh1StreamDisposable: Disposable? = null
         private var scanDisposable: Disposable? = null
@@ -63,7 +60,7 @@ class UnityBridge private constructor(
         internal fun getInitializedSingletonReference(
             unityActivity: Context,
             debugModeOn: Boolean,
-            polarDeviceIds: List<String>
+            polarDeviceIds: Array<String>
         ): UnityBridge.Companion {
             if (this.initialized) {
                 return this

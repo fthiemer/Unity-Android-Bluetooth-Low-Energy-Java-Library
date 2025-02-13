@@ -8,7 +8,7 @@ import android.content.Context
  * Also better modularity for potential multiple instances later (e.g. Polar and general).
  */
 object UnityBridgeFactory {
-    fun createUnityBridge(applicationContext: Context, debugModeOn: Boolean, polarDeviceIds: List<String>): UnityBridge.Companion {
+    fun createUnityBridge(applicationContext: Context, debugModeOn: Boolean, polarDeviceIds: Array<String>): UnityBridge.Companion {
         return UnityBridge.getInitializedSingletonReference(applicationContext, debugModeOn, polarDeviceIds)
     }
 }

@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace 'com.velorexe.unityandroidble'
-    compileSdk 33
+    compileSdk 34
     defaultConfig {
         minSdkVersion 29
         targetSdkVersion 34
@@ -32,13 +32,16 @@ android {
     }
 }
 
+project.archivesBaseName = "unityandroidble"
+project.version = '1.0.0'
+
 dependencies {
-    implementation files('libs/unity.jar')
+    compileOnly files('libs/unity.jar')
     implementation 'com.github.polarofficial:polar-ble-sdk:5.12.0'
     implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0"
     implementation 'io.reactivex.rxjava3:rxjava:3.1.10'
     implementation 'io.reactivex.rxjava3:rxandroid:3.0.2'
-    implementation 'androidx.core:core-ktx:1.15.0'
+    implementation 'androidx.core:core-ktx:1.13.0'
     implementation 'io.reactivex.rxjava3:rxandroid:3.0.2'
     implementation 'androidx.appcompat:appcompat:1.7.0'
     testImplementation 'junit:junit:4.13.2'

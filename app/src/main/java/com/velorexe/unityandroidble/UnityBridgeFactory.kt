@@ -1,6 +1,6 @@
 package com.velorexe.unityandroidble
 
-import android.content.Context
+import com.unity3d.player.UnityPlayerForGameActivity
 
 /**
  * Only creation function for [UnityBridge] creation accessible from outside this module (=from Unity).
@@ -8,7 +8,8 @@ import android.content.Context
  * Also better modularity for potential multiple instances later (e.g. Polar and general).
  */
 object UnityBridgeFactory {
-    fun createUnityBridge(applicationContext: Context, debugModeOn: Boolean, polarDeviceIds: Array<String>): UnityBridge.Companion {
+    @JvmStatic
+    fun createUnityBridge(applicationContext: UnityPlayerForGameActivity, debugModeOn: Boolean, polarDeviceIds: Array<String>): UnityBridge.Companion {
         return UnityBridge.getInitializedSingletonReference(applicationContext, debugModeOn, polarDeviceIds)
     }
 }

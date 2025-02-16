@@ -13,6 +13,7 @@ import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
 import io.reactivex.rxjava3.disposables.Disposable
 import kotlinx.serialization.json.Json
 import com.unity3d.player.UnityPlayer
+import com.unity3d.player.UnityPlayerForGameActivity
 import kotlin.properties.Delegates
 
 /**
@@ -21,7 +22,7 @@ import kotlin.properties.Delegates
  * HR/PPI-Streaming mit CSV-Logging, Biofeedback-Berechnung, u.a.
  */
 class UnityBridge private constructor(
-    private val unityActivity: Context,
+    private val unityActivity: UnityPlayerForGameActivity,
     private val debugModeOn: Boolean,
     private val polarDeviceIds: List<String>
 ) {
@@ -51,14 +52,12 @@ class UnityBridge private constructor(
         private val connectedPolarDevicesInfo: LinkedHashMap<String, PolarDeviceInfo> by lazy { LinkedHashMap() }
         private val connectedStreamDisposables: LinkedHashMap<String, LinkedHashMap<PolarBleApi.PolarDeviceDataType,Disposable>> by lazy { LinkedHashMap() }
 
-
-
         @Volatile
         private var initialized: Boolean = false
         private val lock = Any()
         //threadsafe singleton
         internal fun getInitializedSingletonReference(
-            unityActivity: Context,
+            unityActivity: UnityPlayerForGameActivity,
             debugModeOn: Boolean,
             polarDeviceIds: Array<String>
         ): UnityBridge.Companion {
@@ -71,7 +70,7 @@ class UnityBridge private constructor(
                     } else {
                         initialized = true
                         api = PolarBleApiDefaultImpl.defaultImplementation(
-                            unityActivity,
+                            unityActivity.context,
                             setOf(
                                 PolarBleApi.PolarBleSdkFeature.FEATURE_HR,
                                 PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_SDK_MODE,

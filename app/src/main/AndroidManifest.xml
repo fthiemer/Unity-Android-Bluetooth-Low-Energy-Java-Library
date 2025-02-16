@@ -24,8 +24,6 @@
         android:name="android.permission.ACCESS_COARSE_LOCATION"
         android:maxSdkVersion="30" />
 
-
-
     <application
         android:allowBackup="true"
         android:supportsRtl="true"

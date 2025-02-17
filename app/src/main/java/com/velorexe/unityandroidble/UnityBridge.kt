@@ -7,13 +7,13 @@ import com.polar.sdk.api.PolarBleApiCallback
 import com.polar.sdk.api.PolarBleApiDefaultImpl
 import com.polar.sdk.api.errors.PolarInvalidArgument
 import com.polar.sdk.api.model.PolarDeviceInfo
+import com.polar.sdk.api.model.PolarHealthThermometerData
 import com.polar.sdk.api.model.PolarHrData
 import com.polar.sdk.api.model.PolarPpiData
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
 import io.reactivex.rxjava3.disposables.Disposable
 import kotlinx.serialization.json.Json
 import com.unity3d.player.UnityPlayer
-import com.unity3d.player.UnityPlayerForGameActivity
 import kotlin.properties.Delegates
 
 /**
@@ -22,9 +22,9 @@ import kotlin.properties.Delegates
  * HR/PPI-Streaming mit CSV-Logging, Biofeedback-Berechnung, u.a.
  */
 class UnityBridge private constructor(
-    private val unityActivity: UnityPlayerForGameActivity,
+    private val unityActivity: Context,
     private val debugModeOn: Boolean,
-    private val polarDeviceIds: List<String>
+    private val polarDeviceIds: Array<String>
 ) {
     companion object {
         private var H10StreamDisposable: Disposable? = null
@@ -57,7 +57,7 @@ class UnityBridge private constructor(
         private val lock = Any()
         //threadsafe singleton
         internal fun getInitializedSingletonReference(
-            unityActivity: UnityPlayerForGameActivity,
+            unityActivity: Context,
             debugModeOn: Boolean,
             polarDeviceIds: Array<String>
         ): UnityBridge.Companion {
@@ -70,7 +70,7 @@ class UnityBridge private constructor(
                     } else {
                         initialized = true
                         api = PolarBleApiDefaultImpl.defaultImplementation(
-                            unityActivity.context,
+                            unityActivity,
                             setOf(
                                 PolarBleApi.PolarBleSdkFeature.FEATURE_HR,
                                 PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_SDK_MODE,
@@ -91,6 +91,10 @@ class UnityBridge private constructor(
                             }
                         }
                         api.setApiCallback(object : PolarBleApiCallback() {
+                            override fun htsNotificationReceived(
+                                identifier: String, data: PolarHealthThermometerData) {
+                                BleMessage("INFO", "HTS", "identifier: $identifier, value: $data").sendToUnity()
+                            }
                             override fun blePowerStateChanged(powered: Boolean) {
                                 BleMessage("INFO","BLE_POWER", "$powered").sendToUnity()
                                 bluetoothEnabled = powered

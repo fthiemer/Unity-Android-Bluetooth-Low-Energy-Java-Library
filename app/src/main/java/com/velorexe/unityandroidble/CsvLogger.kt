@@ -18,9 +18,9 @@ object CsvLogger {
         try {
             // Öffnet die Datei im Append-Modus. (Stelle sicher, dass Berechtigungen vorhanden sind.)
             fileWriter = FileWriter(File(filePath), true)
-            Log.d(TAG, "CSV file path set to: $filePath")
+            BleMessage("CSV_LOGGER","SET_FILE_PATH", "$filePath").sendToUnity()
         } catch (e: Exception) {
-            Log.e(TAG, "Error setting CSV file path: ${e.localizedMessage}")
+            BleMessage("CSV_LOGGER","ERROR", "Error setting CSV file path: ${e.localizedMessage}").sendToUnity()
         }
     }
 

@@ -1,3 +1,5 @@
+import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
+
 plugins {
     id 'com.android.library'
     id 'org.jetbrains.kotlin.android' version '2.1.0'
@@ -12,6 +14,8 @@ android {
         targetSdkVersion 34
         versionCode 1
         versionName "1.0"
+        resConfigs "auto"
+        resConfigs "en"
     }
 
     buildTypes {
@@ -33,9 +37,10 @@ android {
         }
     }
 
-    tasks.withType(com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar) {
+    tasks.withType(ShadowJar) {
         // Bei Konflikten einfach die erste gefundene Datei verwenden:
-        exclude 'META-INF/*.kotlin_module'
+        exclude 'META-INF/kotlin-stdlib-jdk7.kotlin_module'
+        exclude 'META-INF/kotlin-stdlib.kotlin_module'
     }
 
     lint {
@@ -50,7 +55,7 @@ dependencies {
     compileOnly files('libs/unity.jar')
     grease 'com.github.polarofficial:polar-ble-sdk:5.14.0'
     grease "org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0"
-    grease 'io.reactivex.rxjava3:rxjava:3.1.10'
+    greaseTree 'io.reactivex.rxjava3:rxjava:3.1.10'
     grease 'org.jetbrains.kotlin:kotlin-stdlib:2.1.0'
     grease 'androidx.core:core-ktx:1.13.0'
     grease 'io.reactivex.rxjava3:rxandroid:3.0.2'

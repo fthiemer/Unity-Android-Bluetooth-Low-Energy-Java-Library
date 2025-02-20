@@ -11,7 +11,13 @@ import org.json.JSONObject
  * id: PolarDeviceID or MacAddress
  * command: relevant method name
  */
-data class BleMessage(val id: String, val command: String, val message: String) {
+data class BleMessage(val command: String, val deviceID: String, val message: String) {
+    enum class FUNCTION {
+        CONNECTION,
+        INFO,
+        CSV_LOGGER,
+    }
+
     var device: String? = null
     var name: String? = null
 
@@ -37,10 +43,10 @@ data class BleMessage(val id: String, val command: String, val message: String) 
      */
     fun sendToUnity() {
         try {
-            if (this.id.isNotEmpty() && this.command.isNotEmpty()) {
+            if (this.deviceID.isNotEmpty() && this.command.isNotEmpty()) {
                 UnityPlayer.UnitySendMessage("BleManager", "OnBleMessage", this.toJsonString())
             } else {
-                this.setError(if (this.id.isEmpty()) "Task ID is empty." else "Command is empty.")
+                this.setError(if (this.deviceID.isEmpty()) "Task ID is empty." else "Command is empty.")
                 UnityPlayer.UnitySendMessage("BleManager", "OnBleMessage", this.toJsonString())
             }
         } catch (e: Exception) {
@@ -57,7 +63,7 @@ data class BleMessage(val id: String, val command: String, val message: String) 
         val obj = JSONObject()
 
         try {
-            obj.put("id", id)
+            obj.put("id", deviceID)
             obj.put("command", command)
             obj.put("message", message)
 

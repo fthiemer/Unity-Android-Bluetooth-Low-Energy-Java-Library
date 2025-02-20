@@ -16,6 +16,9 @@ import kotlinx.serialization.json.Json
 import com.unity3d.player.UnityPlayer
 import kotlin.properties.Delegates
 
+import com.velorexe.unityandroidble.BleMessage.FUNCTION.INFO as INFO
+import com.velorexe.unityandroidble.BleMessage.FUNCTION.CONNECTION as CONNECTION
+
 /**
  * UnityBridge: Stellt die Verbindung zwischen Unity und der Polar BLE API her.
  * Erweiterungen: Zeitsynchronisation, parallele Verbindung von H10 und OH1,
@@ -93,30 +96,30 @@ class UnityBridge private constructor(
                         api.setApiCallback(object : PolarBleApiCallback() {
                             override fun htsNotificationReceived(
                                 identifier: String, data: PolarHealthThermometerData) {
-                                BleMessage("INFO", "HTS", "identifier: $identifier, value: $data").sendToUnity()
+                                BleMessage(INFO.name, identifier, "HTS data: $data").sendToUnity()
                             }
                             override fun blePowerStateChanged(powered: Boolean) {
-                                BleMessage("INFO","BLE_POWER", "$powered").sendToUnity()
+                                BleMessage(INFO.name, "BLE_POWER", "Power state changed: $powered").sendToUnity()
                                 bluetoothEnabled = powered
                             }
                             override fun deviceConnected(polarDeviceInfo: PolarDeviceInfo) {
-                                BleMessage(polarDeviceInfo.deviceId, "CONNECT", "OnConnect").sendToUnity()
+                                BleMessage(CONNECTION.name, polarDeviceInfo.deviceId, "Connected to:" + PolarDeviceInfoToString(polarDeviceInfo)).sendToUnity()
                                 connectedPolarDevicesInfo[polarDeviceInfo.deviceId] = polarDeviceInfo
                                 devicesConnected = connectedPolarDevicesInfo.size
                             }
                             override fun deviceConnecting(polarDeviceInfo: PolarDeviceInfo) {
-                                BleMessage(polarDeviceInfo.deviceId, "CONNECT", "OnConnecting").sendToUnity()
+                                BleMessage(CONNECTION.name, polarDeviceInfo.deviceId, "Connecting to:" + PolarDeviceInfoToString(polarDeviceInfo)).sendToUnity()
                             }
                             override fun deviceDisconnected(polarDeviceInfo: PolarDeviceInfo) {
                                 connectedPolarDevicesInfo.remove(polarDeviceInfo.deviceId)
                                 devicesConnected = connectedPolarDevicesInfo.size
-                                BleMessage(polarDeviceInfo.deviceId, "CONNECT", "OnDisconnect").sendToUnity()
+                                BleMessage(CONNECTION.name, polarDeviceInfo.deviceId, "OnDisconnect").sendToUnity()
                             }
                             override fun disInformationReceived(identifier: String, disInfo: DisInfo) {
-                                BleMessage("INFO", "DIS", "identifier: $identifier, value: $disInfo").sendToUnity()
+                                BleMessage(INFO.name, identifier, "${disInfo.key}: ${disInfo.value}").sendToUnity()
                             }
                             override fun batteryLevelReceived(identifier: String, level: Int) {
-                                BleMessage("INFO", "BATTERY_LEVEL", "$level").sendToUnity()
+                                BleMessage(INFO.name, identifier, "$identifier,$level").sendToUnity()
                             }
                         })
                         return this
@@ -139,24 +142,70 @@ class UnityBridge private constructor(
                 // Falls die API eine Methode anbietet, z. B.:
                 val calendar = java.util.Calendar.getInstance()
                 api.setLocalTime(deviceId, calendar);
-                BleMessage("TIME_SYNC", "Try to set device time for $deviceId " +
+                BleMessage("TIME_SYNC", deviceId,  "Device time $deviceId is set " +
                         "to ${calendar.timeInMillis}, it is currently " +
-                        "set to ${api.getLocalTime(deviceId)}. Most likely restart needed to apply.", "XYZ").sendToUnity()
+                        "set to ${api.getLocalTime(deviceId)}. Most likely restart needed to apply.").sendToUnity()
             } catch (e: Exception) {
-                BleMessage("TIME_SYNC", "Error setting device time for $deviceId: ${e.localizedMessage}", "XYZ").sendToUnity()
+                BleMessage("TIME_SYNC", deviceId, "Error setting device time for: ${e.localizedMessage}").sendToUnity()
             }
         }
 
+        fun getConnectedDevicesInfo(){
+            var connectedDevicesInfo = ""
+            for (deviceID in connectedPolarDevicesInfo.keys) {
+                connectedDevicesInfo += "Connected device information: ${connectedPolarDevicesInfo[deviceID]}"
+            }
+            BleMessage(INFO.name, "ALL", connectedDevicesInfo).sendToUnity()
+        }
+        
+        
         fun getDeviceTime(deviceId: String) {
             try {
                 val deviceTime = api.getLocalTime(deviceId)
                 val systemTime = java.util.Calendar.getInstance()
-                BleMessage("TIME_SYNC", "Device time $deviceId is set " +
-                        "to ${deviceTime}. System time is ${systemTime}.", "XYZ").sendToUnity()
+                BleMessage("TIME_SYNC", deviceId,"Device time $deviceId is set " +
+                        "to ${deviceTime}. System time is ${systemTime}.").sendToUnity()
             } catch (e: Exception) {
-                BleMessage("TIME_SYNC", "Error getting device time for $deviceId: ${e.localizedMessage}", "XYZ").sendToUnity()
+                BleMessage("TIME_SYNC", deviceId, "Error getting device time for $deviceId: ${e.localizedMessage}").sendToUnity()
             }
         }
+
+        fun PolarDeviceInfoToString(info: PolarDeviceInfo): String {
+            return """
+                PolarDeviceInfo:
+                Device ID: ${info.deviceId}
+                Address: ${info.address}
+                RSSI: ${info.rssi} dBm
+                Name: ${info.name}
+                Connectable: ${info.isConnectable}
+                Has Heart Rate Service: ${info.hasHeartRateService}
+                Has File System Service: ${info.hasFileSystemService}
+                """.trimIndent()
+        }
+
+/* Put in:
+@Override
+public void onPause() {
+    super.onPause();
+    api.backgroundEntered();
+}
+
+@Override
+public void onResume() {
+    super.onResume();
+    api.foregroundEntered();
+}
+
+@Override
+public void onDestroy() {
+    super.onDestroy();
+    api.shutDown();
+}
+
+    Connect to a Polar device using api.connectToDevice(<DEVICE_ID>) where <DEVICE_ID> is the deviceID printed to your sensor, using api.autoConnectToDevice(-50, null, null).subscribe() to connect nearby device or api.searchForDevice() to scan and then select the device
+
+ */
+
 
 //        /**
 //         * Sendet einen Ping an Unity, um die Latenz (Ping-Pong-Zeit) zu ermitteln.
@@ -167,7 +216,7 @@ class UnityBridge private constructor(
 //            pingMessage.jsonData = pingTimestamp.toString()
 //            sendToUnity(pingMessage)
 //        }
-//
+
 //        /**
 //         * Wird von Unity aufgerufen, wenn ein Pong empfangen wurde.
 //         * unityTime: Der Zeitstempel von Unity.
@@ -186,12 +235,14 @@ class UnityBridge private constructor(
             try {
                 api.connectToDevice(h10DeviceId)
                 api.connectToDevice(oh1DeviceId)
-                BleMessage(API_LOGGER_TAG, "Connecting to H10 and OH1", "XYZ").sendToUnity()
+                BleMessage(CONNECTION.name, h10DeviceId,"Connecting To Devices").sendToUnity()
+                BleMessage(CONNECTION.name, oh1DeviceId,"Connecting To Devices").sendToUnity()
             } catch (e: PolarInvalidArgument) {
-                BleMessage(API_LOGGER_TAG, "Connect error: ${e.localizedMessage}", "XYZ").sendToUnity()
+                BleMessage(CONNECTION.name, h10DeviceId,"Connect error: ${e.localizedMessage}").sendToUnity()
+                BleMessage(CONNECTION.name, oh1DeviceId,"Connect error: ${e.localizedMessage}").sendToUnity()
             }
-            for (deviceInformation in connectedPolarDevicesInfo) {
-                BleMessage(API_LOGGER_TAG, "Connected device information: $deviceInformation.", "XYZ").sendToUnity()
+            for (deviceID in connectedPolarDevicesInfo.keys) {
+                BleMessage(CONNECTION.name, deviceID,"Connected device information: ${connectedPolarDevicesInfo[deviceID]}").sendToUnity()
             }
         }
 
@@ -217,6 +268,7 @@ class UnityBridge private constructor(
                     .subscribe(
                         { hrData: PolarHrData ->
                             // Für HR/PPI in H10: Hinweis – wenn PPI aktiviert ist, werden HR-Daten nur alle 5 Sekunden aktualisiert.
+                            // startet erst nach 25 Sekunden
                             val timestamp = System.currentTimeMillis()
                             // Alternative: Falls gewünscht, können Timestamps in Nanosekunden erzeugt werden:
                             // val nsTimestamp = System.nanoTime() + 946684800000000000L
@@ -225,20 +277,19 @@ class UnityBridge private constructor(
                             val csvLine = "$timestamp,${hrData.samples.firstOrNull()?.hr ?: 0},$rrString"
                             CsvLogger.logData(csvLine)
 
-                            val message = BleMessage(API_LOGGER_TAG, "H10 HR Stream data", "XYZ")
-                            message.jsonData = Json.encodeToString(hrData)
+                            val message = BleMessage(INFO.name, deviceId, "H10 HR Stream data received")
                             message.sendToUnity()
 
                             processBiofeedback(hrData)
                         },
                         { error: Throwable ->
-                            val message = BleMessage(API_LOGGER_TAG, "H10 HR Stream Error", "XYZ")
+                            var message : BleMessage = BleMessage(INFO.name, deviceId, "H10 HR Stream error: $error")
                             message.setError("HR stream failed: $error")
                             message.sendToUnity()
                             H10StreamDisposable?.dispose()
                         },
                         {
-                            val message = BleMessage(API_LOGGER_TAG, "H10 HR Stream Complete", "XYZ")
+                            val message = BleMessage(INFO.name, deviceId, "H10 HR Stream complete (=finished)")                            
                             message.sendToUnity()
                             H10StreamDisposable?.dispose()
                         }
@@ -287,27 +338,23 @@ class UnityBridge private constructor(
                     .observeOn(AndroidSchedulers.mainThread())
                     .subscribe(
                         { ppiData: PolarPpiData ->
-                            //TODO: Synchronisation überdenken, wahrshcl. nicht sinnvoll local time des devices zu nehmeen
                             val timestamp = System.currentTimeMillis()
-                            // Beispielhaft: Berechne den Durchschnitt der PPI-Werte
                             val avgPpi = if (ppiData.samples.isNotEmpty()) ppiData.samples.map { it.ppi }.average() else 0.0
                             val csvLine = "$timestamp,$avgPpi"
                             CsvLogger.logData(csvLine)
 
-                            val message = BleMessage(API_LOGGER_TAG, "OH1 PPI Stream data", "XYZ")
+                            val message = BleMessage(INFO.name, deviceId, "OH1 PPI Stream data received: ")
                             message.jsonData = Json.encodeToString(ppiData)
                             message.sendToUnity()
-
-                            // Optional: Hier können zusätzliche Biofeedback-Berechnungen für OH1 erfolgen.
                         },
                         { error: Throwable ->
-                            val message = BleMessage(API_LOGGER_TAG, "OH1 PPI Stream Error", "XYZ")
+                            val message = BleMessage(INFO.name, deviceId, "OH1 PPI Stream error: $error")
                             message.setError("OH1 PPI stream failed: $error")
                             message.sendToUnity()
                             oh1StreamDisposable?.dispose()
                         },
                         {
-                            val message = BleMessage(API_LOGGER_TAG, "OH1 PPI Stream Complete", "XYZ")
+                            val message = BleMessage(INFO.name, deviceId, "OH1 PPI Stream complete")
                             message.sendToUnity()
                             oh1StreamDisposable?.dispose()
                         }
@@ -323,7 +370,7 @@ class UnityBridge private constructor(
         // 5. Request Full Stream Settings (Stub)
         // –––––––––––––––––––––––––––––––––––––––––––––––––––
         fun requestFullStreamSettings(deviceId: String) {
-            BleMessage("STREAM_SETTINGS", "Requested full stream settings for $deviceId", "XYZ").sendToUnity()
+            BleMessage(INFO.name, deviceId, "Request full stream settings called and not implemented yet.").sendToUnity()
         }
 
         // –––––––––––––––––––––––––––––––––––––––––––––––––––
@@ -344,6 +391,12 @@ class UnityBridge private constructor(
             }
         }
 
+        /**
+         * Sendet eine [BleMessage] an Unity.
+         *
+         * @param message Die [BleMessage], die an Unity gesendet werden soll.
+         * Sendet nur an das GameObject mit dem Namen "BleMessageAdapter" und ruft die Methode "OnBleMessage" auf.
+         */
         fun sendToUnity(message: BleMessage) {
             UnityPlayer.UnitySendMessage("BleMessageAdapter", "OnBleMessage", message.toJsonString())
         }
